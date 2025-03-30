@@ -1,0 +1,49 @@
+#define F_CPU 16000000UL
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include "uart_ese.h"
+
+volatile uint16_t adc_value = 0;
+
+
+void init_adc() {
+	ADMUX = (1 << REFS0) | (1 << ADLAR); //use AVCC as the reference voltage,enables left adjustment
+	ADCSRA = (1 << ADEN) | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); //enables ADC module&interrupt and set prescale to 128
+}
+
+uint8_t acd_read(uint8_t port) {
+	
+	ADMUX = (ADMUX & 0xF8) | (port & 0x07);	//use only 3 LSB(ADC0-ADC7)
+	ADCSRA |= (1 << ADSC); //start ADC conversion
+	while (ADCSRA & (1 << ADSC)); //Waits until ADC conversion is completed
+	
+	return ADCH; //Returns the 8-bit ADC result (from ADCH)
+}
+
+void init_timer1() {
+	TCCR1B |= (1 << WGM12) | (1 << CS12) | (1 << CS10);  //Enables CTC Mode,Uses prescaler = 1024
+	OCR1A = 3125; //200 ms 
+	TIMSK1 |= (1 << OCIE1A); //Enables Timer1 compare match interrupt
+}
+
+
+ISR(TIMER1_COMPA_vect) {
+	ADCSRA |= (1 << ADSC);  
+}
+
+
+ISR(ADC_vect) {
+	adc_value = ADC >> 1; //Reads the ADC value and shifts it one bit right 
+	putUART((uint8_t)adc_value);  //Send 8-bit to UART
+}
+
+int main(void) {
+	init_uart(9600);  //buad rate 9600
+	init_adc(); 	
+	init_timer1();  
+	sei();  //enable interrupt
+
+	while (1) {
+		
+	}
+}
